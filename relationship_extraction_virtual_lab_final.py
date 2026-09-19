@@ -88,24 +88,243 @@ class PDF(FPDF):
     def footer(self):
         self.set_y(-15);self.set_font('Helvetica','I',8);self.cell(0,10,f'Page {self.page_no()}',align='C')
 
-def make_pdf(name,roll,date,text,ents,triples,score,conclusion):
-    p=PDF();p.alias_nb_pages();p.set_auto_page_break(True,margin=18);p.add_page();p.set_font('Helvetica','B',16);p.cell(0,10,TITLE,new_x='LMARGIN',new_y='NEXT');p.set_font('Helvetica','',10);p.multi_cell(0,6,'Outcome: Entity-relationship triples suitable for graph construction.');p.ln(4)
-    p.set_font('Helvetica','B',10);p.cell(35,6,'Student Name:');p.set_font('Helvetica','',10);p.cell(70,6,name or 'N/A');p.set_font('Helvetica','B',10);p.cell(25,6,'Roll No.:');p.set_font('Helvetica','',10);p.cell(50,6,roll or 'N/A');p.ln(7)
-    p.set_font('Helvetica','B',10);p.cell(35,6,'Date:');p.set_font('Helvetica','',10);p.cell(70,6,date);p.set_font('Helvetica','B',10);p.cell(25,6,'Quiz:');p.set_font('Helvetica','',10);p.cell(50,6,f'{score}/{len(QUIZ)}');p.ln(10)
-    for head,body in [('1. Aim',AIM),('2. Input Text',text or 'N/A')]:
-        p.set_font('Helvetica','B',11);p.cell(0,7,head,new_x='LMARGIN',new_y='NEXT');p.set_font('Helvetica','',9);p.multi_cell(0,5,body);p.ln(3)
-    p.set_font('Helvetica','B',11);p.cell(0,7,'3. Identified Entities',new_x='LMARGIN',new_y='NEXT');p.set_font('Helvetica','',9)
-    for e in ents:p.cell(0,5,f"- {e['Entity']} ({e['Type']})",new_x='LMARGIN',new_y='NEXT')
-    p.ln(3);p.set_font('Helvetica','B',11);p.cell(0,7,'4. Extracted Triples',new_x='LMARGIN',new_y='NEXT')
-    p.set_font('Helvetica','B',8)
-    for h,w in zip(['Subject','Relation','Object'],[58,55,65]):p.cell(w,6,h,border=1,align='C')
-    p.ln();p.set_font('Helvetica','',8)
-    for t in triples:
-        for v,w in zip([t['Subject'],t['Relation'],t['Object']],[58,55,65]):p.cell(w,6,str(v)[:32],border=1,align='C')
-        p.ln()
-    p.ln(5);p.set_font('Helvetica','B',11);p.cell(0,7,'5. Result / Conclusion',new_x='LMARGIN',new_y='NEXT');p.set_font('Helvetica','',9);p.multi_cell(0,5,conclusion)
-    return bytes(p.output())
+def pdf_safe(text):
+    """Convert Unicode text to characters supported by FPDF core fonts."""
+    if text is None:
+        return ""
 
+    replacements = {
+        "–": "-",
+        "—": "-",
+        "→": "->",
+        "←": "<-",
+        "↔": "<->",
+        "↓": "v",
+        "↑": "^",
+        "•": "-",
+        "’": "'",
+        "‘": "'",
+        "“": '"',
+        "”": '"',
+        "…": "...",
+        "≥": ">=",
+        "≤": "<=",
+        "×": "x",
+        "÷": "/",
+        "°": " degrees",
+    }
+
+    text = str(text)
+
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+
+    return text.encode("latin-1", "replace").decode("latin-1")
+
+def make_pdf(name, roll, date, text, entities, triples, score, conclusion):
+
+    p = FPDF()
+    p.set_auto_page_break(True, margin=18)
+    p.add_page()
+
+    p.set_font("Helvetica", "B", 16)
+    p.cell(
+        0,
+        10,
+        pdf_safe("Relationship Extraction from Text"),
+        new_x="LMARGIN",
+        new_y="NEXT"
+    )
+
+    p.set_font("Helvetica", "", 10)
+
+    p.multi_cell(
+        0,
+        6,
+        pdf_safe(
+            "Outcome: Entity-relationship triples suitable for graph construction."
+        )
+    )
+
+    p.ln(4)
+
+    # Student information
+    p.set_font("Helvetica", "B", 10)
+    p.cell(35, 6, "Student Name:")
+    p.set_font("Helvetica", "", 10)
+    p.cell(70, 6, pdf_safe(name or "N/A"))
+
+    p.set_font("Helvetica", "B", 10)
+    p.cell(28, 6, "Roll No.:")
+    p.set_font("Helvetica", "", 10)
+    p.cell(50, 6, pdf_safe(roll or "N/A"))
+
+    p.ln(7)
+
+    p.set_font("Helvetica", "B", 10)
+    p.cell(35, 6, "Date:")
+    p.set_font("Helvetica", "", 10)
+    p.cell(70, 6, pdf_safe(date))
+
+    p.set_font("Helvetica", "B", 10)
+    p.cell(28, 6, "Quiz:")
+    p.set_font("Helvetica", "", 10)
+    p.cell(50, 6, pdf_safe(f"{score}/{len(QUIZ)}"))
+
+    p.ln(12)
+
+    # Aim
+    p.set_font("Helvetica", "B", 11)
+    p.cell(
+        0,
+        7,
+        "1. Aim",
+        new_x="LMARGIN",
+        new_y="NEXT"
+    )
+
+    p.set_font("Helvetica", "", 9)
+    p.multi_cell(0, 5, pdf_safe(AIM))
+    p.ln(3)
+
+    # Input
+    p.set_font("Helvetica", "B", 11)
+    p.cell(
+        0,
+        7,
+        "2. Input Text",
+        new_x="LMARGIN",
+        new_y="NEXT"
+    )
+
+    p.set_font("Helvetica", "", 9)
+    p.multi_cell(
+        0,
+        5,
+        pdf_safe(text or "N/A")
+    )
+    p.ln(3)
+
+    # Entities
+    p.set_font("Helvetica", "B", 11)
+    p.cell(
+        0,
+        7,
+        "3. Identified Entities",
+        new_x="LMARGIN",
+        new_y="NEXT"
+    )
+
+    p.set_font("Helvetica", "", 9)
+
+    if entities:
+        for item in entities:
+            line = f"- {item['Entity']} ({item['Type']})"
+
+            p.cell(
+                0,
+                5,
+                pdf_safe(line),
+                new_x="LMARGIN",
+                new_y="NEXT"
+            )
+    else:
+        p.cell(
+            0,
+            5,
+            "No named entities identified.",
+            new_x="LMARGIN",
+            new_y="NEXT"
+        )
+
+    p.ln(3)
+
+    # Triples
+    p.set_font("Helvetica", "B", 11)
+    p.cell(
+        0,
+        7,
+        "4. Extracted Triples",
+        new_x="LMARGIN",
+        new_y="NEXT"
+    )
+
+    if triples:
+
+        widths = [58, 55, 65]
+
+        p.set_font("Helvetica", "B", 8)
+
+        for heading, width in zip(
+            ["Subject", "Relation", "Object"],
+            widths
+        ):
+            p.cell(
+                width,
+                6,
+                heading,
+                border=1,
+                align="C"
+            )
+
+        p.ln()
+
+        p.set_font("Helvetica", "", 8)
+
+        for triple in triples:
+
+            values = [
+                triple["Subject"],
+                triple["Relation"],
+                triple["Object"]
+            ]
+
+            for value, width in zip(values, widths):
+                p.cell(
+                    width,
+                    6,
+                    pdf_safe(str(value)[:32]),
+                    border=1,
+                    align="C"
+                )
+
+            p.ln()
+
+    else:
+
+        p.set_font("Helvetica", "", 9)
+
+        p.cell(
+            0,
+            5,
+            "No triples extracted.",
+            new_x="LMARGIN",
+            new_y="NEXT"
+        )
+
+    p.ln(5)
+
+    # Conclusion
+    p.set_font("Helvetica", "B", 11)
+
+    p.cell(
+        0,
+        7,
+        "5. Result / Conclusion",
+        new_x="LMARGIN",
+        new_y="NEXT"
+    )
+
+    p.set_font("Helvetica", "", 9)
+
+    p.multi_cell(
+        0,
+        5,
+        pdf_safe(conclusion)
+    )
+
+    return bytes(p.output())
+    
 def init():
     for k,v in {'text':DEFAULT,'ents':[],'triples':[],'done':False,'trials':[],'score':0,'quiz':False}.items():
         if k not in st.session_state:st.session_state[k]=v
