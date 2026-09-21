@@ -385,31 +385,112 @@ def graph(triples, highlighted_nodes=None, highlighted_edges=None, title="Extrac
 
 def application_graph():
     applications = [
-        "Knowledge Graphs", "Search & QA", "Recommendation",
-        "Fraud / Compliance", "Biomedical NLP", "Social Media Analysis",
+        "Knowledge Graphs",
+        "Search & QA",
+        "Recommendation",
+        "Fraud / Compliance",
+        "Biomedical NLP",
+        "Social Media Analysis",
     ]
+
+    # Circular/radial layout: Relationship Extraction at the centre.
+    import math
+
+    center_x, center_y = 0, 0
+    radius = 3.25
+
+    # Evenly spaced around the centre, starting from the top.
+    angles = [
+        math.radians(90),
+        math.radians(30),
+        math.radians(-30),
+        math.radians(-90),
+        math.radians(-150),
+        math.radians(150),
+    ]
+
+    positions = {
+        app: (radius * math.cos(angle), radius * math.sin(angle))
+        for app, angle in zip(applications, angles)
+    }
+
     fig = go.Figure()
-    for i in range(1, len(applications) + 1):
-        fig.add_trace(go.Scatter(x=[0, 1], y=[0, i - 1], mode="lines", line=dict(width=2), showlegend=False, hoverinfo="none"))
+
+    # Connections from the central concept to each application.
+    for app in applications:
+        x, y = positions[app]
+        fig.add_trace(
+            go.Scatter(
+                x=[center_x, x],
+                y=[center_y, y],
+                mode="lines",
+                line=dict(width=2),
+                showlegend=False,
+                hoverinfo="none",
+            )
+        )
+
+    # Central node.
     fig.add_trace(
         go.Scatter(
-            x=[0] + [1] * len(applications),
-            y=[0] + list(range(len(applications))),
-            mode="markers+text",
-            text=["Relationship\nExtraction"] + applications,
-            textposition=["middle left"] + ["middle right"] * len(applications),
-            marker=dict(size=[48] + [34] * len(applications)),
+            x=[center_x],
+            y=[center_y],
+            mode="markers",
+            marker=dict(size=62, line=dict(width=2)),
             showlegend=False,
+            hoverinfo="text",
+            hovertext=["Relationship Extraction"],
         )
     )
+
+    fig.add_annotation(
+        x=center_x,
+        y=center_y,
+        text="<b>Relationship<br>Extraction</b>",
+        showarrow=False,
+        align="center",
+    )
+
+    # Surrounding application nodes.
+    fig.add_trace(
+        go.Scatter(
+            x=[positions[a][0] for a in applications],
+            y=[positions[a][1] for a in applications],
+            mode="markers",
+            marker=dict(size=42, line=dict(width=2)),
+            showlegend=False,
+            hoverinfo="text",
+            hovertext=applications,
+        )
+    )
+
+    # Labels just outside each surrounding circle.
+    for app in applications:
+        x, y = positions[app]
+        angle = math.atan2(y, x)
+        label_radius = radius + 0.55
+        lx = label_radius * math.cos(angle)
+        ly = label_radius * math.sin(angle)
+
+        fig.add_annotation(
+            x=lx,
+            y=ly,
+            text=app,
+            showarrow=False,
+            align="center",
+            xanchor="center",
+            yanchor="middle",
+        )
+
     fig.update_layout(
         title="Real-World Applications of Relationship Extraction",
-        height=430,
-        xaxis=dict(visible=False, range=[-0.5, 1.8]),
-        yaxis=dict(visible=False),
+        height=520,
+        xaxis=dict(visible=False, range=[-5.2, 5.2]),
+        yaxis=dict(visible=False, range=[-5.2, 5.2], scaleanchor="x", scaleratio=1),
         plot_bgcolor="white",
-        margin=dict(l=40, r=80, t=70, b=30),
+        margin=dict(l=40, r=40, t=70, b=40),
     )
+
     return fig
 
 
@@ -899,10 +980,6 @@ def simulation():
 
 def quiz():
     st.title("Quiz")
-    st.write(
-        f"10 questions are randomly selected from the {len(QUIZ_BANK)}-question bank "
-        "when a new app session is loaded."
-    )
 
     questions = st.session_state.quiz_questions
     answers = []
@@ -973,94 +1050,88 @@ def make_certificate_pdf(student_name, certificate_date):
     cert.set_auto_page_break(False)
     cert.add_page()
 
+    page_w = 297
+    page_h = 210
+
     # Professional certificate border.
     cert.set_draw_color(34, 55, 75)
     cert.set_line_width(1.4)
-    cert.rect(8, 8, 281, 194)
+    cert.rect(8, 8, page_w - 16, page_h - 16)
     cert.set_line_width(0.5)
-    cert.rect(13, 13, 271, 184)
+    cert.rect(13, 13, page_w - 26, page_h - 26)
 
-    # Subtle inner accent lines.
+    # Accent rules.
     cert.set_draw_color(145, 115, 45)
     cert.set_line_width(0.7)
-    cert.line(28, 30, 262, 30)
-    cert.line(28, 174, 262, 174)
+    cert.line(35, 31, page_w - 35, 31)
+    cert.line(35, 178, page_w - 35, 178)
 
-    # Header.
+    # Header - explicitly set full-width x/y so text can never drift sideways.
     cert.set_text_color(32, 49, 66)
+    cert.set_xy(20, 17)
     cert.set_font("Helvetica", "B", 12)
-    cert.cell(
-        0, 8, "VIRTUAL LABORATORY",
-        align="C", new_x="LMARGIN", new_y="NEXT"
-    )
+    cert.cell(257, 7, "VIRTUAL LABORATORY", align="C")
 
-    cert.set_font("Helvetica", "B", 25)
-    cert.cell(
-        0, 14, "CERTIFICATE OF COMPLETION",
-        align="C", new_x="LMARGIN", new_y="NEXT"
-    )
+    cert.set_xy(20, 25)
+    cert.set_font("Helvetica", "B", 24)
+    cert.cell(257, 13, "CERTIFICATE OF COMPLETION", align="C")
 
-    cert.set_font("Helvetica", "", 11)
-    cert.cell(
-        0, 8, "Academic Virtual Laboratory Experiment",
-        align="C", new_x="LMARGIN", new_y="NEXT"
-    )
-
-    cert.ln(10)
+    cert.set_xy(20, 38)
+    cert.set_font("Helvetica", "", 10.5)
+    cert.cell(257, 7, "Academic Virtual Laboratory Experiment", align="C")
 
     # Main statement.
-    cert.set_font("Helvetica", "", 12)
-    cert.multi_cell(
-        0,
-        8,
-        pdf_safe(
-            "This is to certify that"
-        ),
-        align="C",
-    )
+    cert.set_xy(20, 52)
+    cert.set_font("Helvetica", "", 11.5)
+    cert.cell(257, 7, "This is to certify that", align="C")
 
-    # Student name is the only required person-specific field.
+    # Student name - explicit centred full-width cell prevents right-side overflow.
+    display_name = (student_name or "Student Name").strip()
+    name_size = 24
+    while name_size > 15:
+        cert.set_font("Helvetica", "B", name_size)
+        if cert.get_string_width(pdf_safe(display_name)) <= 220:
+            break
+        name_size -= 1
+
+    cert.set_xy(20, 62)
     cert.set_text_color(26, 45, 62)
-    cert.set_font("Helvetica", "B", 24)
-    cert.cell(
-        0, 14, pdf_safe(student_name or "Student Name"),
-        align="C", new_x="LMARGIN", new_y="NEXT"
-    )
+    cert.cell(257, 13, pdf_safe(display_name), align="C")
 
-    # Underline for name, similar to formal certificate layouts.
-    name_width = min(max(len(student_name or "Student Name") * 4.2 + 16, 55), 180)
+    # Name underline.
     cert.set_draw_color(70, 70, 70)
-    cert.set_line_width(0.6)
+    cert.set_line_width(0.5)
+    name_width = min(max(cert.get_string_width(pdf_safe(display_name)) + 18, 55), 220)
     cert.line(
-        (297 - name_width) / 2,
-        88,
-        (297 + name_width) / 2,
-        88,
+        (page_w - name_width) / 2,
+        77,
+        (page_w + name_width) / 2,
+        77,
     )
 
     cert.set_text_color(32, 49, 66)
-    cert.set_font("Helvetica", "", 12)
-    cert.ln(7)
-    cert.multi_cell(
-        0,
-        8,
-        pdf_safe(
-            "has successfully completed the virtual laboratory experiment on"
-        ),
-        align="C",
-    )
+    cert.set_xy(20, 83)
+    cert.set_font("Helvetica", "", 11.5)
+    cert.cell(257, 7, "has successfully completed the virtual laboratory experiment on", align="C")
 
-    cert.set_font("Helvetica", "B", 19)
-    cert.cell(
-        0, 11, pdf_safe("Relationship Extraction from Text"),
-        align="C", new_x="LMARGIN", new_y="NEXT"
-    )
+    # Experiment title - explicit full-width centred cell.
+    title = "Relationship Extraction from Text"
+    title_size = 19
+    while title_size > 14:
+        cert.set_font("Helvetica", "B", title_size)
+        if cert.get_string_width(pdf_safe(title)) <= 225:
+            break
+        title_size -= 1
 
-    cert.set_font("Helvetica", "", 10.5)
-    cert.ln(4)
+    cert.set_xy(20, 93)
+    cert.cell(257, 11, pdf_safe(title), align="C")
+
+    # Compact description to keep the certificate visually balanced.
+    cert.set_xy(34, 107)
+    cert.set_font("Helvetica", "", 9.5)
     cert.multi_cell(
-        0,
-        6,
+        229,
+        5.5,
         pdf_safe(
             "The experiment covered semantic relationship extraction, named entity "
             "recognition, Subject-Relation-Object triples, graph visualization, "
@@ -1069,43 +1140,41 @@ def make_certificate_pdf(student_name, certificate_date):
         align="C",
     )
 
-    # Completion/date metadata.
-    cert.ln(9)
-    cert.set_font("Helvetica", "B", 10)
-    cert.cell(82, 6, "Date of Completion", align="C")
-    cert.cell(82, 6, "Assessment", align="C")
-    cert.cell(82, 6, "Experiment Status", align="C")
-    cert.ln(6)
+    # Completion/date metadata, kept well inside the border.
+    cert.set_xy(30, 132)
+    cert.set_font("Helvetica", "B", 9.5)
+    cert.cell(79, 6, "DATE OF COMPLETION", align="C")
+    cert.cell(79, 6, "ASSESSMENT", align="C")
+    cert.cell(79, 6, "EXPERIMENT STATUS", align="C")
 
-    cert.set_font("Helvetica", "", 10)
-    cert.cell(82, 6, pdf_safe(str(certificate_date)), align="C")
-    cert.cell(82, 6, "Simulation + Quiz", align="C")
-    cert.cell(82, 6, "Completed", align="C")
+    cert.set_xy(30, 139)
+    cert.set_font("Helvetica", "", 9.5)
+    cert.cell(79, 6, pdf_safe(str(certificate_date)), align="C")
+    cert.cell(79, 6, "Simulation + Quiz", align="C")
+    cert.cell(79, 6, "Completed", align="C")
 
     # Signature lines.
-    cert.ln(16)
-    left_x = 42
-    right_x = 185
-    y = 181
-
     cert.set_draw_color(70, 70, 70)
     cert.set_line_width(0.5)
-    cert.line(left_x, y, left_x + 70, y)
-    cert.line(right_x, y, right_x + 70, y)
+    left_x = 55
+    right_x = 172
+    y = 166
+    cert.line(left_x, y, left_x + 75, y)
+    cert.line(right_x, y, right_x + 75, y)
 
-    cert.set_y(y + 2)
+    cert.set_y(168)
     cert.set_x(left_x)
-    cert.set_font("Helvetica", "", 9)
-    cert.cell(70, 5, "Faculty / Lab Coordinator", align="C")
+    cert.set_font("Helvetica", "", 8.5)
+    cert.cell(75, 5, "Faculty / Lab Coordinator", align="C")
     cert.set_x(right_x)
-    cert.cell(70, 5, "Virtual Laboratory", align="C")
+    cert.cell(75, 5, "Virtual Laboratory", align="C")
 
     # Footer note.
-    cert.set_y(191)
+    cert.set_xy(20, 184)
     cert.set_font("Helvetica", "I", 7)
     cert.cell(
-        0,
-        4,
+        257,
+        5,
         "Generated by the Relationship Extraction Virtual Laboratory | Academic project certificate",
         align="C",
     )
@@ -1139,6 +1208,12 @@ def certificate():
         "Certificate Date",
         value=datetime.now().date(),
         key="certificate_date",
+    )
+
+    st.info(
+        "The certificate is generated in a professional academic style. "
+        "It is a project certificate and is not an official certificate issued "
+        "by IIT Kharagpur or any other institution."
     )
 
     if simulation_done and quiz_done:
