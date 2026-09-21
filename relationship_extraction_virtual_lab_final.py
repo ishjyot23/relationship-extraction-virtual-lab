@@ -1141,12 +1141,6 @@ def certificate():
         key="certificate_date",
     )
 
-    st.info(
-        "The certificate is generated in a professional academic style. "
-        "It is a project certificate and is not an official certificate issued "
-        "by IIT Kharagpur or any other institution."
-    )
-
     if simulation_done and quiz_done:
         if student_name.strip():
             cert_pdf = make_certificate_pdf(
