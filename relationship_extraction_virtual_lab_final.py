@@ -6,6 +6,9 @@ from datetime import datetime
 from fpdf import FPDF
 from io import BytesIO
 import re
+import json
+import random
+from pathlib import Path
 
 # Optional document readers
 try:
@@ -58,53 +61,29 @@ PATTERNS = {
     "partnered with": ["partnered with", "collaborated with", "worked with"],
 }
 
-QUIZ = [
-    (
-        "What is the main purpose of relationship extraction?",
-        [
-            "Identify semantic relationships between entities",
-            "Translate text",
-            "Remove punctuation",
-            "Generate random text",
-        ],
-        0,
-    ),
-    (
-        "What is the main structured output?",
-        ["Subject–Relation–Object triple", "Only nouns", "Audio file", "Image matrix"],
-        0,
-    ),
-    (
-        "What does NER identify?",
-        ["Named entities and their types", "Only edges", "Quiz answers", "PDF pages"],
-        0,
-    ),
-    (
-        "For 'Google developed Gemini', which is correct?",
-        [
-            "(Google, developed, Gemini)",
-            "(Gemini, developed, Google)",
-            "(Google, Google, Gemini)",
-            "(developed, Google, Gemini)",
-        ],
-        0,
-    ),
-    (
-        "In the graph, the relationship is represented by a:",
-        ["Node", "Directed edge", "Document", "Token"],
-        1,
-    ),
-    (
-        "Why are triples suitable for graph construction?",
-        [
-            "They provide structured entities and relationships",
-            "They remove relationships",
-            "They contain punctuation",
-            "They cannot be visualized",
-        ],
-        0,
-    ),
-]
+QUIZ_BANK_PATH = Path(__file__).resolve().parent / "quiz_bank.json"
+
+
+def load_quiz_bank():
+    try:
+        with QUIZ_BANK_PATH.open("r", encoding="utf-8") as f:
+            bank = json.load(f)
+    except FileNotFoundError:
+        st.error("quiz_bank.json is missing. Keep it in the same Git repository/folder as this .py file.")
+        st.stop()
+    except json.JSONDecodeError as exc:
+        st.error(f"quiz_bank.json is invalid: {exc}")
+        st.stop()
+
+    if len(bank) < 10:
+        st.error("The quiz bank must contain at least 10 questions.")
+        st.stop()
+
+    return bank
+
+
+QUIZ_BANK = load_quiz_bank()
+QUIZ_SIZE = 10
 
 BOOK_REFERENCES = [
     (
@@ -480,7 +459,7 @@ def make_pdf(name, date, text, entities, triples, score, conclusion):
     p.set_font("Helvetica", "B", 10)
     p.cell(28, 6, "Quiz:")
     p.set_font("Helvetica", "", 10)
-    p.cell(50, 6, pdf_safe(f"{score}/{len(QUIZ)}"))
+    p.cell(50, 6, pdf_safe(f"{score}/{QUIZ_SIZE}"))
     p.ln(12)
 
     for heading, content in [("1. Aim", AIM), ("2. Input Text", text or "N/A")]:
@@ -613,6 +592,7 @@ def init():
         "trials": [],
         "score": 0,
         "quiz": False,
+        "quiz_questions": random.sample(QUIZ_BANK, QUIZ_SIZE),
         "method": "spaCy NER + linguistic relation",
         "query": "",
         "query_matches": [],
@@ -919,14 +899,47 @@ def simulation():
 
 def quiz():
     st.title("Self Evaluation")
+    st.write(
+        f"10 questions are randomly selected from the {len(QUIZ_BANK)}-question bank "
+        "when a new app session is loaded."
+    )
+
+    questions = st.session_state.quiz_questions
     answers = []
-    for i, (q, opts, ans) in enumerate(QUIZ, 1):
-        answers.append(st.radio(f"Q{i}. {q}", opts, key=f"q{i}"))
+
+    for i, item in enumerate(questions, 1):
+        options = item["options"]
+        answer = st.radio(
+            f"Q{i}. {item['question']}",
+            options,
+            index=None,
+            key=f"quiz_q_{item['id']}",
+        )
+        answers.append(answer)
+
     if st.button("Submit Quiz", type="primary", key="submit_quiz"):
-        score = sum(opts.index(a) == ans for a, (_, opts, ans) in zip(answers, QUIZ))
+        if any(answer is None for answer in answers):
+            st.warning("Please answer all 10 questions before submitting.")
+            return
+
+        score = sum(
+            options.index(answer) == item["answer"]
+            for answer, item in zip(answers, questions)
+            for options in [item["options"]]
+        )
+
         st.session_state.score = score
         st.session_state.quiz = True
-        st.info(f"Final Score: {score}/{len(QUIZ)} ({score / len(QUIZ) * 100:.0f}%)")
+        st.info(f"Final Score: {score}/{QUIZ_SIZE} ({score / QUIZ_SIZE * 100:.0f}%)")
+
+        st.subheader("Answer Review")
+        for i, (answer, item) in enumerate(zip(answers, questions), 1):
+            correct = item["options"][item["answer"]]
+            if answer == correct:
+                st.write(f"**Q{i}: Correct**")
+            else:
+                st.write(f"**Q{i}: Correct answer — {correct}**")
+
 
 
 def result():
