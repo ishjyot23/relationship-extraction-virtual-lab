@@ -137,11 +137,29 @@ BLOG_REFERENCES = [
 
 @st.cache_resource
 def load_spacy_model():
+    """Load spaCy English model and recover gracefully if it is absent."""
+    model_name = "en_core_web_sm"
     try:
-        return spacy.load("en_core_web_sm")
+        return spacy.load(model_name)
     except OSError:
-        st.error("spaCy model missing. Run: python -m spacy download en_core_web_sm")
-        st.stop()
+        # Streamlit Cloud may install spaCy but not its language model.
+        # Try to install the model automatically on first startup.
+        try:
+            from spacy.cli import download
+            with st.spinner("Installing spaCy English model (first run only)..."):
+                download(model_name)
+            return spacy.load(model_name)
+        except Exception as exc:
+            # Keep the Virtual Lab usable even if a deployment has no
+            # permission/network access to install the optional model.
+            st.warning(
+                "The spaCy English model could not be installed automatically. "
+                "The app will continue with a lightweight fallback entity detector. "
+                f"Details: {exc}"
+            )
+            fallback = spacy.blank("en")
+            fallback.add_pipe("sentencizer")
+            return fallback
 
 
 @st.cache_resource(show_spinner="Loading REBEL transformer model (first run may take a while)...")
@@ -180,6 +198,12 @@ def relation(e1, e2, sent):
     if hits:
         return sorted(hits, reverse=True)[0][1]
 
+    # In fallback mode the synthetic entity objects do not have spaCy token
+    # indices. The explicit relation patterns above still work, so skip the
+    # token-level verb fallback for those objects.
+    if not hasattr(e1, "i") or not hasattr(e2, "i"):
+        return None
+
     lo, hi = min(e1.start, e2.start), max(e1.start, e2.start)
     verbs = [t.lemma_ for t in sent if lo <= t.i <= hi and t.pos_ == "VERB"]
     return verbs[0] if verbs else None
@@ -198,8 +222,49 @@ def extract_spacy(text):
             seen.add(key)
             ents.append({"Entity": e.text, "Type": e.label_})
 
+    # Fallback entity detection for deployments where en_core_web_sm cannot be
+    # installed. It intentionally targets obvious capitalized names/organizations
+    # so the lab can still demonstrate its relationship-extraction workflow.
+    if not ents:
+        fallback_pattern = re.compile(
+            r"\b(?:[A-Z][A-Za-z0-9&.-]*)(?:\s+(?:[A-Z][A-Za-z0-9&.-]*)){0,3}\b"
+        )
+        ignored = {
+            "The", "This", "That", "What", "Which", "Relationship",
+            "Subject", "Relation", "Object", "Real World",
+        }
+        for match in fallback_pattern.finditer(text):
+            value = match.group(0).strip()
+            if value in ignored:
+                continue
+            key = (value.lower(), "ENTITY")
+            if key not in seen:
+                seen.add(key)
+                ents.append({"Entity": value, "Type": "ENTITY"})
+
     for sent in doc.sents:
         sentence_entities = list(sent.ents)
+
+        if not sentence_entities and not doc.ents and ents:
+            sentence_entities = []
+            sent_text = sent.text
+            for item in ents:
+                for match in re.finditer(
+                    re.escape(item["Entity"]), sent_text
+                ):
+                    sentence_entities.append(
+                        type(
+                            "FallbackEntity",
+                            (),
+                            {
+                                "text": item["Entity"],
+                                "label_": item["Type"],
+                                "start": match.start(),
+                                "start_char": match.start(),
+                                "end_char": match.end(),
+                            },
+                        )()
+                    )
         for i in range(len(sentence_entities)):
             for j in range(i + 1, len(sentence_entities)):
                 e1, e2 = sentence_entities[i], sentence_entities[j]
