@@ -137,29 +137,18 @@ BLOG_REFERENCES = [
 
 @st.cache_resource
 def load_spacy_model():
-    """Load spaCy English model and recover gracefully if it is absent."""
+    """Load the spaCy English model installed during deployment."""
     model_name = "en_core_web_sm"
+
     try:
         return spacy.load(model_name)
     except OSError:
-        # Streamlit Cloud may install spaCy but not its language model.
-        # Try to install the model automatically on first startup.
-        try:
-            from spacy.cli import download
-            with st.spinner("Installing spaCy English model (first run only)..."):
-                download(model_name)
-            return spacy.load(model_name)
-        except Exception as exc:
-            # Keep the Virtual Lab usable even if a deployment has no
-            # permission/network access to install the optional model.
-            st.warning(
-                "The spaCy English model could not be installed automatically. "
-                "The app will continue with a lightweight fallback entity detector. "
-                f"Details: {exc}"
-            )
-            fallback = spacy.blank("en")
-            fallback.add_pipe("sentencizer")
-            return fallback
+        st.error(
+            "The spaCy English language model is not installed in this deployment. "
+            "Ensure the en_core_web_sm wheel is listed in requirements.txt and "
+            "redeploy the app."
+        )
+        st.stop()
 
 
 @st.cache_resource(show_spinner="Loading REBEL transformer model (first run may take a while)...")
